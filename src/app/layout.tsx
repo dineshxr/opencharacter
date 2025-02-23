@@ -58,7 +58,7 @@ export default async function RootLayout({
 
   return (
     <AuthProvider>
-      <html lang="en" className="dark">
+      <html lang="en" suppressHydrationWarning className="dark">
         <head>
           <ThemeScript/>
           <link rel="icon" href="/opencharacter_icon.png" sizes="any" />

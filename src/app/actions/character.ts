@@ -34,94 +34,127 @@ const CreateCharacterSchema = z.object({
 });
 
 export async function createCharacter(formData: FormData) {
-  const session = await auth();
-  if (!session || !session.user) {
-    throw new Error("You must be logged in to create a character");
-  }
-
-  const formDataObject: { [key: string]: FormDataEntryValue } =
-    Object.fromEntries(formData.entries());
-
-  const validationResult = CreateCharacterSchema.safeParse(formDataObject);
-
-  if (!validationResult.success) {
-    console.error("Validation errors:", validationResult.error.errors);
-    return {
-      success: false,
-      error: "Invalid form data",
-      details: validationResult.error.errors,
-    };
-  }
-
-  const {
-    name,
-    tagline,
-    description,
-    greeting,
-    visibility,
-    tags,
-    temperature,
-    top_p,
-    top_k,
-    frequency_penalty,
-    presence_penalty,
-    repetition_penalty,
-    min_p,
-    top_a,
-    max_tokens,
-  } = validationResult.data;
-
   try {
+    console.log('Starting character creation...');
+    const session = await auth();
+    console.log('Auth session:', session);
+    if (!session || !session.user) {
+      throw new Error("You must be logged in to create a character");
+    }
+    console.log('User authenticated:', session.user.id);
+
+    const formDataObject: { [key: string]: FormDataEntryValue } =
+      Object.fromEntries(formData.entries());
+
+    console.log('Form data:', formDataObject);
+
+    const validationResult = CreateCharacterSchema.safeParse(formDataObject);
+
+    if (!validationResult.success) {
+      console.error("Validation errors:", validationResult.error.errors);
+      return {
+        success: false,
+        error: "Invalid form data",
+        details: validationResult.error.errors,
+      };
+    }
+
+    const {
+      name,
+      tagline,
+      description,
+      greeting,
+      visibility,
+      tags,
+      temperature,
+      top_p,
+      top_k,
+      frequency_penalty,
+      presence_penalty,
+      repetition_penalty,
+      min_p,
+      top_a,
+      max_tokens,
+    } = validationResult.data;
+
     // Handle avatar upload
+    console.log('Processing avatar...');
     let avatarImageUrl = null;
     const avatarFile = formData.get("avatar") as File | null;
     if (avatarFile && avatarFile.size > 0) {
-      avatarImageUrl = await uploadToR2(avatarFile);
+      try {
+        console.log('Uploading avatar to R2...');
+        avatarImageUrl = await uploadToR2(avatarFile);
+        console.log('Avatar uploaded:', avatarImageUrl);
+      } catch (error) {
+        console.error('Error uploading avatar:', error);
+        throw new Error('Failed to upload avatar image');
+      }
     }
 
     // Handle banner upload
     let bannerImageUrl = null;
     const bannerFile = formData.get("banner") as File | null;
     if (bannerFile && bannerFile.size > 0) {
-      bannerImageUrl = await uploadToR2(bannerFile);
+      try {
+        console.log('Uploading banner to R2...');
+        bannerImageUrl = await uploadToR2(bannerFile);
+        console.log('Banner uploaded:', bannerImageUrl);
+      } catch (error) {
+        console.error('Error uploading banner:', error);
+        throw new Error('Failed to upload banner image');
+      }
     }
 
-    const newCharacter = await db
-      .insert(characters)
-      // @ts-ignore
-      .values({
-        name,
-        tagline,
-        description,
-        greeting,
-        visibility,
-        userId: session.user.id,
-        tags: JSON.stringify(tags),
-        interactionCount: 0,
-        likeCount: 0,
-        avatar_image_url: avatarImageUrl,
-        banner_image_url: bannerImageUrl, // Add banner image URL
-        createdAt: sql`CURRENT_TIMESTAMP`,
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-        temperature,
-        top_p,
-        top_k,
-        frequency_penalty,
-        presence_penalty,
-        repetition_penalty,
-        min_p,
-        top_a,
-        max_tokens,
-      })
-      .returning();
+    const characterData = {
+      name,
+      tagline,
+      description,
+      greeting,
+      visibility,
+      userId: session.user.id,
+      tags: JSON.stringify(tags),
+      interactionCount: 0,
+      likeCount: 0,
+      avatar_image_url: avatarImageUrl,
+      banner_image_url: bannerImageUrl,
+      temperature: temperature || 1.0,
+      top_p: top_p || 1.0,
+      top_k: top_k || 0,
+      frequency_penalty: frequency_penalty || 0.0,
+      presence_penalty: presence_penalty || 0.0,
+      repetition_penalty: repetition_penalty || 1.0,
+      min_p: min_p || 0.0,
+      top_a: top_a || 0.0,
+      max_tokens: max_tokens || 600,
+      createdAt: sql`CURRENT_TIMESTAMP`,
+      updatedAt: sql`CURRENT_TIMESTAMP`
+    };
 
-    return { success: true, character: newCharacter[0] };
-  } catch (error) {
+    console.log('Inserting character into database:', characterData);
+
+    try {
+      const newCharacter = await db
+        .insert(characters)
+        .values(characterData)
+        .returning();
+
+      if (!newCharacter || newCharacter.length === 0) {
+        throw new Error('No character returned from database');
+      }
+
+      console.log('Character created successfully:', newCharacter[0]);
+      return { success: true, character: newCharacter[0] };
+    } catch (error) {
+      console.error('Database error:', error);
+      throw new Error('Failed to create character in database');
+    }
+  } catch (error: any) {
     console.error("Error creating character:", error);
     return {
       success: false,
-      error: "Failed to create character",
-      details: error,
+      error: error.message || "Failed to create character",
+      details: error.stack || String(error)
     };
   }
 }

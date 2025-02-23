@@ -1,10 +1,12 @@
 import { AwsClient } from "aws4fetch";
 import { deflate } from "pako";
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
-const R2_BUCKET = "character-avatar"
+import { env } from '@/env.mjs';
+
+const R2_ACCOUNT_ID = env.R2_ACCOUNT_ID;
+const R2_ACCESS_KEY_ID = env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = env.R2_SECRET_ACCESS_KEY;
+const R2_BUCKET = "character-avatar";
 const R2_URL = `https://${R2_BUCKET}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
 
@@ -105,16 +107,25 @@ export default class FileStorage {
 
 export async function uploadToR2(file: File): Promise<string> {
   try {
+    console.log('Starting file upload to R2...');
     const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer); // Convert ArrayBuffer to Uint8Array
-    const uniqueFilename = `${Date.now()}-${file.name}`; // Generate a unique filename
-    const res = await FileStorage.put(uniqueFilename, uint8Array); // Use Uint8Array with unique filename
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const uniqueFilename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    
+    console.log('Uploading file:', uniqueFilename);
+    const res = await FileStorage.put(uniqueFilename, uint8Array);
+    
     if (res.status === 200) {
-      return `https://pub-ee9c36333afb4a8abe1e26dcc310f8ec.r2.dev/${uniqueFilename}`; // Return the file URL
+      const fileUrl = `${env.R2_PUBLIC_URL}/${uniqueFilename}`;
+      console.log('File uploaded successfully:', fileUrl);
+      return fileUrl;
+    } else {
+      console.error('Upload failed with status:', res.status);
+      throw new Error(`Upload failed with status: ${res.status}`);
     }
   } catch (e) {
-    console.error(e);
-    throw new Error(String(e));
+    console.error('Error uploading file to R2:', e);
+    throw new Error(`Failed to upload file: ${e.message || String(e)}`);
   }
   return "";
 }

@@ -9,12 +9,15 @@ export const {
 	signOut,
 	auth,
 } = NextAuth({
+	session: {
+		strategy: 'jwt',
+	},
 	trustHost: true,
 	adapter: DrizzleAdapter(db),
 	providers: [
 		Google({
-			clientId: process.env.GOOGLE_CLIENT_ID,
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET
+			clientId: process.env.AUTH_GOOGLE_ID,
+			clientSecret: process.env.AUTH_GOOGLE_SECRET
 		})
 	],
 });
